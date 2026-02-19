@@ -39,33 +39,45 @@ class LanguageHandler:
             self.play_sound(confirmed_lang)
 
  def play_sound(self, lang):
+        # Використовуємо прямий виклик системного динаміка
         try:
-            if lang == 1033:  # EN (нижчий тон)
-                winsound.Beep(750, 150) 
-            elif lang == 1058:  # UA (вищий тон)
-                winsound.Beep(1000, 150)
-        except:
-            pass
+            if lang == 1033:  # EN
+                winsound.Beep(600, 150) # Низький звук
+            elif lang == 1058:  # UA
+                winsound.Beep(1200, 150) # Високий звук
+        except Exception as e:
+            print(f"Звукова помилка: {e}")
 
 def create_image(text="LS"):
-    # Створюємо іконку 64x64
-    # Синій фон для UA, темно-сірий для EN, чорний для інших
-    color = (0, 120, 215) if text == "UA" else (60, 60, 60) if text == "EN" else (0, 0, 0)
-    image = Image.new('RGB', (64, 64), color=color)
-    dc = ImageDraw.Draw(image)
+    # Створюємо фон: Синій для UA, Сірий для EN
+    bg_color = (0, 120, 215) if text == "UA" else (80, 80, 80)
+    image = Image.new('RGB', (64, 64), color=bg_color)
+    d = ImageDraw.Draw(image)
     
-    # Малюємо текст (використовуємо стандартний шрифт PIL)
-    # Якщо захочете гарний шрифт, пізніше підключимо .ttf файл
-    dc.text((18, 25), text, fill="white") 
+    # Спробуємо намалювати текст жирніше
+    try:
+        # Малюємо вручну жирні літери (якщо шрифт не підвантажився)
+        d.text((12, 10), text, fill="white", stroke_width=2) 
+    except:
+        d.text((20, 20), text, fill="white")
+        
     return image
 
 def monitor_loop(handler, icon):
     print("LangSignal: Моніторинг активний...")
     while True:
         lang = handler.get_current_lang()
-        if lang:
-            # Визначаємо текст для іконки
-            text = "EN" if lang == 1033 else "UA" if lang == 1058 else "??"
+        if lang and lang != handler.last_lang:
+            # Оновлюємо текст
+            text = "EN" if lang == 1033 else "UA" if lang == 1058 else "!!"
+            
+            # 1. Змінюємо іконку
+            icon.icon = create_image(text)
+            
+            # 2. Викликаємо обробку (там звук і фільтр)
+            handler.on_layout_change(lang)
+            
+        time.sleep(0.3) # Трохи збільшили паузу для стабільності
 
     monitor_thread = threading.Thread(target=monitor_loop, args=(handler, icon), daemon=True)
     monitor_thread.start()
