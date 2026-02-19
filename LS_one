@@ -3,18 +3,13 @@ import time
 import threading
 import winsound
 import pystray
-import os
-import sys
 from PIL import Image, ImageDraw, ImageFont
 
-# 1. СЛОВНИК МОВ (універсальність)
-LANG_MAP = {
-    1033: "EN", # English (US)
-    2057: "EN", # English (UK)
-    1058: "UA", # Ukrainian
-    1045: "PL", # Polish
-    1031: "DE", # German
-    1036: "FR", # French
+# 1. ПАРАМЕТРИ ПРОЄКТУ (Словник мов та кольорів)
+LANG_DATA = {
+    1033: {"label": "EN", "color": (70, 70, 70), "pitch": 600},
+    1058: {"label": "UA", "color": (0, 120, 215), "pitch": 1000},
+    1045: {"label": "PL", "color": (220, 20, 60), "pitch": 800}
 }
 
 class LanguageHandler:
@@ -25,35 +20,16 @@ class LanguageHandler:
         try:
             user32 = ctypes.windll.user32
             hwnd = user32.GetForegroundWindow()
-            if not hwnd: return None
             thread_id = user32.GetWindowThreadProcessId(hwnd, 0)
-            layout = user32.GetKeyboardLayout(thread_id) & 0xFFFF
-            return layout
+            return user32.GetKeyboardLayout(thread_id) & 0xFFFF
         except:
             return None
 
-    def play_sound(self, lang):
-        try:
-            # Стандартний звук Windows для підтвердження
-            winsound.PlaySound("SystemAsterisk", winsound.SND_ALIAS | winsound.SND_ASYNC)
-        except:
-            pass
-
-def create_image(text="LS"):
-    # Кольорова палітра для комерційного вигляду
-    colors = {
-        "UA": (0, 120, 215),  # Синій
-        "EN": (70, 70, 70),    # Темно-сірий
-        "PL": (220, 20, 60),   # Червоний
-        "DE": (0, 0, 0),       # Чорний
-        "LS": (100, 100, 100)  # Сірий
-    }
-    bg_color = colors.get(text, (100, 100, 100))
+def create_image(text, bg_color):
     image = Image.new('RGB', (64, 64), color=bg_color)
     d = ImageDraw.Draw(image)
-    
+    d.rectangle([2, 2, 61, 61], outline="white", width=3)
     try:
-        # Використовуємо Arial Bold для чіткості
         font = ImageFont.truetype("arialbd.ttf", 40)
         d.text((5, 5), text, fill="white", font=font)
     except:
@@ -61,56 +37,37 @@ def create_image(text="LS"):
     return image
 
 def monitor_loop(handler, icon):
-    print("LangSignal: Моніторинг активний...")
+    print("LangSignal: Моніторинг активовано...")
     while True:
-        lang = handler.get_current_lang()
-        if lang and lang != handler.last_lang:
-            text = LANG_MAP.get(lang, "??")
-            print(f"Зміна мови на: {text} ({lang})")
+        # Подвійна перевірка для стабільності звуку
+        s1 = handler.get_current_lang()
+        time.sleep(0.05)
+        s2 = handler.get_current_lang()
+        
+        if s1 == s2 and s1 != handler.last_lang and s1 in LANG_DATA:
+            data = LANG_DATA[s1]
+            print(f"Мова зафіксована: {data['label']}")
             
-            # Оновлення візуалу та звуку
-            icon.icon = create_image(text)
-            handler.last_lang = lang
-            handler.play_sound(lang)
+            # Оновлюємо іконку
+            icon.icon = create_image(data['label'], data['color'])
             
-        time.sleep(0.2)
-
-def setup_autostart(status):
-    """Функція для меню автозапуску"""
-    try:
-        import pythoncom
-        from win32com.client import Dispatch
-        shortcut_path = os.path.join(os.getenv('APPDATA'), r'Microsoft\Windows\Start Menu\Programs\Startup', "LangSignal.lnk")
-        if status:
-            shell = Dispatch('WScript.Shell')
-            shortcut = shell.CreateShortCut(shortcut_path)
-            target = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv)
-            shortcut.Targetpath = target
-            shortcut.WorkingDirectory = os.path.dirname(target)
-            shortcut.save()
-            print("Автозапуск активовано")
-        else:
-            if os.path.exists(shortcut_path): os.remove(shortcut_path)
-    except Exception as e:
-        print(f"Помилка автозапуску: {e}")
+            # Один чистий звук
+            winsound.Beep(data['pitch'], 200)
+            
+            handler.last_lang = s1
+            
+        time.sleep(0.1)
 
 if __name__ == "__main__":
-    handler = LanguageHandler()
+    h = LanguageHandler()
+    # Початковий стан
+    current = h.get_current_lang()
+    start_info = LANG_DATA.get(current, {"label": "LS", "color": (100, 100, 100)})
     
-    # Початковий стан іконки
-    start_lang = handler.get_current_lang()
-    start_text = LANG_MAP.get(start_lang, "LS")
-    icon = pystray.Icon("LangSignal", create_image(start_text), "LangSignal")
+    test_icon = pystray.Icon("LangSignal", create_image(start_info['label'], start_info['color']), "LangSignal")
+    
+    t = threading.Thread(target=monitor_loop, args=(h, test_icon), daemon=True)
+    t.start()
 
-    # Запуск моніторингу в окремому потоці
-    monitor_thread = threading.Thread(target=monitor_loop, args=(handler, icon), daemon=True)
-    monitor_thread.start()
-
-    # Меню в треї
-    icon.menu = pystray.Menu(
-        pystray.MenuItem('Автозапуск увімкнути', lambda: setup_autostart(True)),
-        pystray.MenuItem('Автозапуск вимкнути', lambda: setup_autostart(False)),
-        pystray.MenuItem('Вихід', lambda i, item: i.stop())
-    )
-
-    icon.run()
+    test_icon.menu = pystray.Menu(pystray.MenuItem('Вихід', lambda i, item: i.stop()))
+    test_icon.run()
