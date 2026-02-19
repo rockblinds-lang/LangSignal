@@ -5,7 +5,11 @@ import winsound
 import pystray
 import os
 import sys
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
+
+# ==========================================
+# КЛАС ОБРОБКИ МОВИ (ЛОГІКА)
+# ==========================================
 class LanguageHandler:
     def __init__(self):
         self.last_lang = self.get_current_lang()
@@ -23,71 +27,108 @@ class LanguageHandler:
         except:
             return None
 
-    def on_layout_change(self, new_lang):
+    def on_layout_change(self, new_lang, icon):
         if new_lang is None or new_lang == self.last_lang:
             return
+        
+        # Скасовуємо попередній таймер, якщо він був (фільтр брязкоту)
         if self.debounce_timer:
             self.debounce_timer.cancel()
-        self.debounce_timer = threading.Timer(self.delay, self.confirm_change, [new_lang])
+            
+        # Запускаємо новий таймер на підтвердження
+        self.debounce_timer = threading.Timer(self.delay, self.confirm_change, [new_lang, icon])
         self.debounce_timer.start()
 
-    def confirm_change(self, confirmed_lang):
+    def confirm_change(self, confirmed_lang, icon):
         current_now = self.get_current_lang()
         if confirmed_lang == current_now and confirmed_lang != self.last_lang:
-            print(f"Зміна розкладки на: {confirmed_lang}")
+            print(f"Підтверджено перехід на: {confirmed_lang}")
             self.last_lang = confirmed_lang
+            
+            # Оновлюємо іконку та звук
+            text = "EN" if confirmed_lang == 1033 else "UA" if confirmed_lang == 1058 else "??"
+            icon.icon = create_image(text)
             self.play_sound(confirmed_lang)
 
- def play_sound(self, lang):
-        # Використовуємо прямий виклик системного динаміка
+    def play_sound(self, lang):
         try:
             if lang == 1033:  # EN
-                winsound.Beep(600, 150) # Низький звук
+                winsound.Beep(700, 150) # Низький писк
             elif lang == 1058:  # UA
-                winsound.Beep(1200, 150) # Високий звук
+                winsound.Beep(1100, 150) # Високий писк
         except Exception as e:
-            print(f"Звукова помилка: {e}")
+            print(f"Помилка звуку: {e}")
 
+# ==========================================
+# ДОПОМІЖНІ ФУНКЦІЇ (UI ТА СИСТЕМА)
+# ==========================================
 def create_image(text="LS"):
-    # Створюємо фон: Синій для UA, Сірий для EN
+    # Створюємо фон (Синій для UA, Сірий для EN)
     bg_color = (0, 120, 215) if text == "UA" else (80, 80, 80)
     image = Image.new('RGB', (64, 64), color=bg_color)
     d = ImageDraw.Draw(image)
     
-    # Спробуємо намалювати текст жирніше
     try:
-        # Малюємо вручну жирні літери (якщо шрифт не підвантажився)
-        d.text((12, 10), text, fill="white", stroke_width=2) 
+        # Спроба використати Arial. Якщо не знайде - перейде в except
+        font = ImageFont.truetype("arial.ttf", 42)
+        # Центруємо текст трохи
+        d.text((5, 5), text, fill="white", font=font)
     except:
-        d.text((20, 20), text, fill="white")
+        # Резервний варіант, якщо шрифтів немає
+        d.text((15, 20), text, fill="white")
         
     return image
+
+def setup_autostart(status):
+    """Налаштування автозавантаження через ярлик у Startup"""
+    try:
+        from win32com.client import Dispatch
+        shortcut_path = os.path.join(os.getenv('APPDATA'), r'Microsoft\Windows\Start Menu\Programs\Startup', "LangSignal.lnk")
+        
+        if status:
+            shell = Dispatch('WScript.Shell')
+            shortcut = shell.CreateShortCut(shortcut_path)
+            target = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv[0])
+            shortcut.Targetpath = target
+            shortcut.WorkingDirectory = os.path.dirname(target)
+            shortcut.save()
+            print("Автозапуск увімкнено")
+        else:
+            if os.path.exists(shortcut_path):
+                os.remove(shortcut_path)
+                print("Автозапуск вимкнено")
+    except Exception as e:
+        print(f"Помилка автозапуску: {e}. Спробуйте: pip install pywin32")
 
 def monitor_loop(handler, icon):
     print("LangSignal: Моніторинг активний...")
     while True:
         lang = handler.get_current_lang()
-        if lang and lang != handler.last_lang:
-            # Оновлюємо текст
-            text = "EN" if lang == 1033 else "UA" if lang == 1058 else "!!"
-            
-            # 1. Змінюємо іконку
-            icon.icon = create_image(text)
-            
-            # 2. Викликаємо обробку (там звук і фільтр)
-            handler.on_layout_change(lang)
-            
-        time.sleep(0.3) # Трохи збільшили паузу для стабільності
+        if lang:
+            handler.on_layout_change(lang, icon)
+        time.sleep(0.2)
 
+# ==========================================
+# ГОЛОВНИЙ ЗАПУСК
+# ==========================================
+if __name__ == "__main__":
+    handler = LanguageHandler()
+    
+    # Створюємо іконку з початковим станом
+    initial_lang = handler.get_current_lang()
+    initial_text = "EN" if initial_lang == 1033 else "UA" if initial_lang == 1058 else "LS"
+    icon = pystray.Icon("LangSignal", create_image(initial_text), "LangSignal")
+
+    # Потік моніторингу
     monitor_thread = threading.Thread(target=monitor_loop, args=(handler, icon), daemon=True)
     monitor_thread.start()
 
-    # Створюємо меню
-    menu = pystray.Menu(
-        pystray.MenuItem('Автозапуск', lambda: setup_autostart(True)),
+    # Меню трею
+    icon.menu = pystray.Menu(
+        pystray.MenuItem('Увімкнути автозапуск', lambda: setup_autostart(True)),
         pystray.MenuItem('Вимкнути автозапуск', lambda: setup_autostart(False)),
         pystray.MenuItem('Вихід', lambda i, item: i.stop())
     )
 
-    icon = pystray.Icon("LangSignal", create_image(), "LangSignal", menu=menu)
+    print("Запуск системного трею...")
     icon.run()
