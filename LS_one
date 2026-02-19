@@ -3,8 +3,9 @@ import time
 import threading
 import winsound
 import pystray
+import os
+import sys
 from PIL import Image, ImageDraw
-
 class LanguageHandler:
     def __init__(self):
         self.last_lang = self.get_current_lang()
@@ -47,19 +48,25 @@ class LanguageHandler:
         except:
             pass
 
-def create_image():
-    image = Image.new('RGB', (64, 64), color=(0, 120, 215))
-    dc = ImageDraw.Draw(image)
-    dc.rectangle((16, 16, 48, 48), fill='white')
-    return image
+def setup_autostart(status):
+    """Створює або видаляє ярлик у папці автозавантаження"""
+    shortcut_path = os.path.join(os.getenv('APPDATA'), r'Microsoft\Windows\Start Menu\Programs\Startup', "LangSignal.lnk")
+    if status:
+        import pythoncom
+        from win32com.client import Dispatch
+        shell = Dispatch('WScript.Shell')
+        shortcut = shell.CreateShortCut(shortcut_path)
+        shortcut.Targetpath = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv[0])
+        shortcut.WorkingDirectory = os.path.dirname(shortcut.Targetpath)
+        shortcut.save()
+    else:
+        if os.path.exists(shortcut_path):
+            os.remove(shortcut_path)
 
-def monitor_loop(handler):
-    print("LangSignal: Моніторинг активний...")
-    while True:
-        lang = handler.get_current_lang()
-        if lang:
-            handler.on_layout_change(lang)
-        time.sleep(0.2)
+if __name__ == "__main__":
+    handler = LanguageHandler()
+    print("Запуск LangSignal...")
+    winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
 
 if __name__ == "__main__":
     handler = LanguageHandler()
