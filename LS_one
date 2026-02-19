@@ -67,7 +67,7 @@ def monitor_loop(handler, icon):
             # Визначаємо текст для іконки
             text = "EN" if lang == 1033 else "UA" if lang == 1058 else "??"
 
-    monitor_thread = threading.Thread(target=monitor_loop, args=(handler,), daemon=True)
+    monitor_thread = threading.Thread(target=monitor_loop, args=(handler, icon), daemon=True)
     monitor_thread.start()
 
     # Створюємо меню
