@@ -7,6 +7,15 @@ import os
 import sys
 from PIL import Image, ImageDraw, ImageFont
 
+LANG_MAP = {
+    1033: "EN", # English (US)
+    2057: "EN", # English (UK)
+    1058: "UA", # Ukrainian
+    1045: "PL", # Polish
+    1031: "DE", # German
+    1036: "FR", # French
+}
+
 # ==========================================
 # КЛАС ОБРОБКИ МОВИ (ЛОГІКА)
 # ==========================================
@@ -63,20 +72,24 @@ class LanguageHandler:
 # ДОПОМІЖНІ ФУНКЦІЇ (UI ТА СИСТЕМА)
 # ==========================================
 def create_image(text="LS"):
-    # Створюємо фон (Синій для UA, Сірий для EN)
-    bg_color = (0, 120, 215) if text == "UA" else (80, 80, 80)
+    # Палітра кольорів для різних мов
+    colors = {
+        "UA": (0, 120, 215),  # Синій
+        "EN": (60, 60, 60),    # Темно-сірий
+        "PL": (220, 20, 60),   # Червоний
+        "DE": (0, 0, 0),       # Чорний
+        "LS": (100, 100, 100)  # Стандартний сірий
+    }
+    bg_color = colors.get(text, (100, 100, 100))
+    
     image = Image.new('RGB', (64, 64), color=bg_color)
     d = ImageDraw.Draw(image)
     
     try:
-        # Спроба використати Arial. Якщо не знайде - перейде в except
-        font = ImageFont.truetype("arial.ttf", 42)
-        # Центруємо текст трохи
+        font = ImageFont.truetype("arialbd.ttf", 40)
         d.text((5, 5), text, fill="white", font=font)
     except:
-        # Резервний варіант, якщо шрифтів немає
-        d.text((15, 20), text, fill="white")
-        
+        d.text((10, 10), text, fill="white")
     return image
 
 def setup_autostart(status):
@@ -104,9 +117,16 @@ def monitor_loop(handler, icon):
     print("LangSignal: Моніторинг активний...")
     while True:
         lang = handler.get_current_lang()
-        if lang:
-            handler.on_layout_change(lang, icon)
-        time.sleep(0.2)
+        if lang and lang != handler.last_lang:
+            # Беремо назву зі словника, або показуємо "??"
+            text = LANG_MAP.get(lang, "??")
+            
+            print(f"Зміна: {text} (код {lang})")
+            icon.icon = create_image(text)
+            handler.last_lang = lang
+            handler.play_sound(lang)
+            
+        time.sleep(0.1)
 
 # ==========================================
 # ГОЛОВНИЙ ЗАПУСК
