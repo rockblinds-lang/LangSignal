@@ -68,14 +68,15 @@ if __name__ == "__main__":
     print("Запуск LangSignal...")
     winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
 
-if __name__ == "__main__":
-    handler = LanguageHandler()
-    print("Запуск LangSignal...")
-    winsound.MessageBeep(winsound.MB_ICONEXCLAMATION) # Звук при старті
-
     monitor_thread = threading.Thread(target=monitor_loop, args=(handler,), daemon=True)
     monitor_thread.start()
 
-    icon = pystray.Icon("LangSignal", create_image(), "LangSignal", 
-                        menu=pystray.Menu(pystray.MenuItem('Вихід', lambda i, item: i.stop())))
+    # Створюємо меню
+    menu = pystray.Menu(
+        pystray.MenuItem('Автозапуск', lambda: setup_autostart(True)),
+        pystray.MenuItem('Вимкнути автозапуск', lambda: setup_autostart(False)),
+        pystray.MenuItem('Вихід', lambda i, item: i.stop())
+    )
+
+    icon = pystray.Icon("LangSignal", create_image(), "LangSignal", menu=menu)
     icon.run()
