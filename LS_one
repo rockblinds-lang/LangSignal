@@ -47,25 +47,25 @@ class LanguageHandler:
         except:
             pass
 
-def setup_autostart(status):
-    """Створює або видаляє ярлик у папці автозавантаження"""
-    shortcut_path = os.path.join(os.getenv('APPDATA'), r'Microsoft\Windows\Start Menu\Programs\Startup', "LangSignal.lnk")
-    if status:
-        import pythoncom
-        from win32com.client import Dispatch
-        shell = Dispatch('WScript.Shell')
-        shortcut = shell.CreateShortCut(shortcut_path)
-        shortcut.Targetpath = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(sys.argv[0])
-        shortcut.WorkingDirectory = os.path.dirname(shortcut.Targetpath)
-        shortcut.save()
-    else:
-        if os.path.exists(shortcut_path):
-            os.remove(shortcut_path)
+def create_image(text="LS"):
+    # Створюємо іконку 64x64
+    # Синій фон для UA, темно-сірий для EN, чорний для інших
+    color = (0, 120, 215) if text == "UA" else (60, 60, 60) if text == "EN" else (0, 0, 0)
+    image = Image.new('RGB', (64, 64), color=color)
+    dc = ImageDraw.Draw(image)
+    
+    # Малюємо текст (використовуємо стандартний шрифт PIL)
+    # Якщо захочете гарний шрифт, пізніше підключимо .ttf файл
+    dc.text((18, 25), text, fill="white") 
+    return image
 
-if __name__ == "__main__":
-    handler = LanguageHandler()
-    print("Запуск LangSignal...")
-    winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+def monitor_loop(handler, icon):
+    print("LangSignal: Моніторинг активний...")
+    while True:
+        lang = handler.get_current_lang()
+        if lang:
+            # Визначаємо текст для іконки
+            text = "EN" if lang == 1033 else "UA" if lang == 1058 else "??"
 
     monitor_thread = threading.Thread(target=monitor_loop, args=(handler,), daemon=True)
     monitor_thread.start()
