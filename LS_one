@@ -38,13 +38,12 @@ class LanguageHandler:
             self.last_lang = confirmed_lang
             self.play_sound(confirmed_lang)
 
-    def play_sound(self, lang):
+ def play_sound(self, lang):
         try:
-            # Використовуємо стандартні звуки Windows, які у вас працюють
-            if lang == 1033:  # EN
-                winsound.MessageBeep(winsound.MB_OK)
-            elif lang == 1058:  # UA
-                winsound.MessageBeep(winsound.MB_ICONASTERISK)
+            if lang == 1033:  # EN (нижчий тон)
+                winsound.Beep(750, 150) 
+            elif lang == 1058:  # UA (вищий тон)
+                winsound.Beep(1000, 150)
         except:
             pass
 
