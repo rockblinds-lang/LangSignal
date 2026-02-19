@@ -1,0 +1,74 @@
+import ctypes
+import time
+import threading
+import winsound
+import pystray
+from PIL import Image, ImageDraw
+
+class LanguageHandler:
+    def __init__(self):
+        self.last_lang = self.get_current_lang()
+        self.debounce_timer = None
+        self.delay = 0.25 
+
+    def get_current_lang(self):
+        try:
+            user32 = ctypes.windll.user32
+            hwnd = user32.GetForegroundWindow()
+            if not hwnd: return None
+            thread_id = user32.GetWindowThreadProcessId(hwnd, 0)
+            layout = user32.GetKeyboardLayout(thread_id) & 0xFFFF
+            return layout
+        except:
+            return None
+
+    def on_layout_change(self, new_lang):
+        if new_lang is None or new_lang == self.last_lang:
+            return
+        if self.debounce_timer:
+            self.debounce_timer.cancel()
+        self.debounce_timer = threading.Timer(self.delay, self.confirm_change, [new_lang])
+        self.debounce_timer.start()
+
+    def confirm_change(self, confirmed_lang):
+        current_now = self.get_current_lang()
+        if confirmed_lang == current_now and confirmed_lang != self.last_lang:
+            print(f"Зміна розкладки на: {confirmed_lang}")
+            self.last_lang = confirmed_lang
+            self.play_sound(confirmed_lang)
+
+    def play_sound(self, lang):
+        try:
+            # Використовуємо стандартні звуки Windows, які у вас працюють
+            if lang == 1033:  # EN
+                winsound.MessageBeep(winsound.MB_OK)
+            elif lang == 1058:  # UA
+                winsound.MessageBeep(winsound.MB_ICONASTERISK)
+        except:
+            pass
+
+def create_image():
+    image = Image.new('RGB', (64, 64), color=(0, 120, 215))
+    dc = ImageDraw.Draw(image)
+    dc.rectangle((16, 16, 48, 48), fill='white')
+    return image
+
+def monitor_loop(handler):
+    print("LangSignal: Моніторинг активний...")
+    while True:
+        lang = handler.get_current_lang()
+        if lang:
+            handler.on_layout_change(lang)
+        time.sleep(0.2)
+
+if __name__ == "__main__":
+    handler = LanguageHandler()
+    print("Запуск LangSignal...")
+    winsound.MessageBeep(winsound.MB_ICONEXCLAMATION) # Звук при старті
+
+    monitor_thread = threading.Thread(target=monitor_loop, args=(handler,), daemon=True)
+    monitor_thread.start()
+
+    icon = pystray.Icon("LangSignal", create_image(), "LangSignal", 
+                        menu=pystray.Menu(pystray.MenuItem('Вихід', lambda i, item: i.stop())))
+    icon.run()
